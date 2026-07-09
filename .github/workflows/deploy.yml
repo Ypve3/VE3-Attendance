@@ -1,16 +1,37 @@
 name: Deploy to EC2
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  deploy:
-    if: github.event.pull_request.merged == true
+  build-and-test:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Build
+        run: CI=true npm run build
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    # Only deploy on push to main or manual trigger — NOT on every PR
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -21,7 +42,6 @@ jobs:
           script: |
             cd ~/app
             git pull origin main
-            npm install
-            npm run build
+            npm install --ignore-scripts
+            CI=true npm run build
             pm2 restart nextjs-app
- 
